@@ -1,4 +1,4 @@
-
+var animationFrameInstalled = false;
 var canvas, ctx;
 var mouseX, mouseY;
 var lastCalledTime;
@@ -7,6 +7,11 @@ var fpsMeter;
 var borders = [];
 
 var totalSize;
+
+var paintGray = true;
+var lastChangePaint;
+
+var density = 5;
 
 
 function getEmittingSide(extrapolated) {
@@ -51,7 +56,7 @@ window.onload = window.onresize = function() {
     mouseY = mousePos.y;
   }, false);
 
-
+  borders = [];
 //  borders = new Array();
   for (var i = 0; i < canvas.width; ++i) {
     var x,y;
@@ -73,7 +78,11 @@ window.onload = window.onresize = function() {
     
   }
 
-  window.requestAnimationFrame(draw);
+  if (!animationFrameInstalled) {
+    window.requestAnimationFrame(draw);
+    animationFrameInstalled = true;
+  }
+  console.log(canvas.width + ' ' + canvas.height);
 }
 
 
@@ -105,18 +114,22 @@ function drawLine() {
       break;
   }
   
-  var length = Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
-  var grad= ctx.createLinearGradient(0, 0, 0, length);
+  if (paintGray) {
+    var length = Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
+    var grad= ctx.createLinearGradient(0, 0, 0, length);
   
-  var startGrey = Math.round(Math.random() * 255);
-  var endGrey = Math.round(Math.random() * 255);
+    var startGrey = Math.round(Math.random() * 255);
+    var endGrey = Math.round(Math.random() * 255);
   
-  var colorStart = "rgba("+startGrey+","+startGrey+","+startGrey+",0.1)";
-  var colorEnd = "rgba("+endGrey+","+endGrey+","+endGrey+",0.1)";
+    var colorStart = "rgba("+startGrey+","+startGrey+","+startGrey+",0.1)";
+    var colorEnd = "rgba("+endGrey+","+endGrey+","+endGrey+",0.1)";
   
-  grad.addColorStop(0, colorStart);
-  grad.addColorStop(1, colorEnd);
-  ctx.strokeStyle = grad;
+    grad.addColorStop(0, colorStart);
+    grad.addColorStop(1, colorEnd);
+    ctx.strokeStyle = grad;
+  } else {
+    ctx.strokeStyle= "rgba(247,37,135,0.1)";
+  }
   
   /*
   console.log(mouseX);
@@ -138,13 +151,16 @@ function drawLine() {
 
 function draw() {
 
-  drawLine();
-  drawLine();
+  for (var i = 0; i < density; ++i) {
+    drawLine();
+  }
+  
   
   window.requestAnimationFrame(draw);
   
   if(!lastCalledTime) {
      lastCalledTime = Date.now();
+     lastChangePaint = Date.now();
      fps = 0;
      return;
   }
@@ -152,5 +168,12 @@ function draw() {
   lastCalledTime = Date.now();
   fps = 1/delta;
   fpsMeter.innerHTML = Math.round(fps) + ' FPS';
+  
+  if (lastChangePaint + 2000 < Date.now()) {
+    lastChangePaint = Date.now();
+    paintGray = paintGray ? false : true;
+  }
+  
+  
   
 }
