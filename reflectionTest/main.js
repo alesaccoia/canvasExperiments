@@ -13,6 +13,10 @@ var lastChangePaint;
 
 var density = 5;
 
+function toDegrees(radians) {
+ return radians * (180/Math.PI);
+}
+
 
 function getEmittingSide(extrapolated) {
   if (extrapolated < canvas.width) {
@@ -55,6 +59,13 @@ window.onload = window.onresize = function() {
     mouseX = mousePos.x;
     mouseY = mousePos.y;
   }, false);
+  
+  canvas.addEventListener('click', function(evt) {
+    var mousePos = getMousePos(canvas, evt);
+    mouseX = mousePos.x;
+    mouseY = mousePos.y;
+    console.log("Dsads");
+  }, false);
 
   borders = [];
 //  borders = new Array();
@@ -78,11 +89,22 @@ window.onload = window.onresize = function() {
     
   }
 
-  if (!animationFrameInstalled) {
+ if (!animationFrameInstalled) {
     window.requestAnimationFrame(draw);
     animationFrameInstalled = true;
   }
+
   console.log(canvas.width + ' ' + canvas.height);
+  
+  for (charIt in charsOutlines) {
+    for (outlineIt in charsOutlines[charIt]) {
+      for (pointIt in charsOutlines[charIt][outlineIt]) {
+        charsOutlines[charIt][outlineIt][pointIt].x += 100;
+        charsOutlines[charIt][outlineIt][pointIt].y += 100;
+      }
+    }
+  }
+
 }
 
 
@@ -92,7 +114,14 @@ function drawLine() {
     return;
   }
   
-  var a = borders[Math.round(mouseX)];
+  var a;
+  
+  if (Math.random() < 0.8) {
+    a = borders[Math.round(mouseX)];
+  } else {
+    a = borders[Math.round(Math.random() * canvas.width / 2)];
+  }
+
   var extrapolated = (mouseX / (canvas.width)) * totalSize;
   
   var thisSide = getEmittingSide(extrapolated);
@@ -114,22 +143,110 @@ function drawLine() {
       break;
   }
   
-  if (paintGray) {
+  // start iterating for intersections
+  
+  var startPoint = {x: a.x, y: a.y};
+  var endPoint = {x: b.x, y: b.y};
+  
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(startPoint.x,startPoint.y);
+  
+  var nrIntersections = 0;
+  var maxIntersections = 10;
+  var hasIntersectedAnything = false;
+  var exitLoop = false;
+  var intersectionSegment;
+  while (!exitLoop && nrIntersections < maxIntersections) {  
+    var intersectionResult, tempResult;
+    var hasIntersected = false;
+    var minDistance = 1000000;
+    // iterate on all segments
+    for (charIt in charsOutlines) {
+      for (outlineIt in charsOutlines[charIt]) {
+        for (var pointIt = 0; pointIt < charsOutlines[charIt][outlineIt].length; ++pointIt) {
+          var currentSegmentStart = charsOutlines[charIt][outlineIt][pointIt];
+          var nextIndex;
+          if (pointIt == (charsOutlines[charIt][outlineIt].length - 1)) {
+            nextIndex = 0;
+          } else {
+            nextIndex = pointIt + 1;
+          }
+          var currentSegmentEnd = charsOutlines[charIt][outlineIt][nextIndex];
+          tempResult = checkLineIntersection(startPoint.x,startPoint.y,endPoint.x,endPoint.y,currentSegmentStart.x,currentSegmentStart.y,currentSegmentEnd.x,currentSegmentEnd.y);
+          if (tempResult.onLine1 && tempResult.onLine2) {
+            var dist = distanceBetweenPoints(startPoint.x,startPoint.y,tempResult.x,tempResult.y);
+            if (dist > 0.5 && dist < minDistance) {
+              minDistance = dist;
+              intersectionResult = tempResult;
+              intersectionSegment = {segStart: currentSegmentStart, segEnd: currentSegmentEnd};
+              hasIntersected = true;
+            }
+          }
+        }
+      }
+    }
+  
+    if (!hasIntersected) {
+      exitLoop = true;
+    } else {
+      
+      // draw to the intersection
+      ctx.lineTo(intersectionResult.x, intersectionResult.y);
+      
+      //
+      // compute reflected angle
+      var angleA = Math.atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x);
+      var angleB = Math.atan2(intersectionSegment.segEnd.y - intersectionSegment.segStart.y, intersectionSegment.segEnd.x - intersectionSegment.segStart.x);
+      var normalToSegment = angleB + Math.PI / 2;
+      var normalInVectorDirection = angleB - Math.PI / 2;
+      var angleIncident = normalInVectorDirection - angleA;
+      var angleReflected = normalToSegment + angleIncident;
+/*
+      console.log("start = " + startPoint.x + ' ' + startPoint.y);
+      console.log("end = " + endPoint.x + ' ' + endPoint.y);
+      console.log("intersection start= " + intersectionSegment.segStart.x + ' ' + intersectionSegment.segStart.y);
+      console.log("intersection end= " + intersectionSegment.segEnd.x + ' ' + intersectionSegment.segEnd.y);
+      console.log("normalToSegment = " + normalToSegment);
+      console.log("normalInVectorDirection = " + normalInVectorDirection);
+      console.log("angleA= " + angleA);
+      console.log("angleB= " + angleB);
+      console.log("angleIncident " + angleIncident);
+      console.log("angleReflected " + angleReflected);
+      console.log("-----");
+      
+      */
+      startPoint.x = intersectionResult.x;
+      startPoint.y = intersectionResult.y;
+      endPoint.x = startPoint.x + Math.cos(angleReflected) * 2000;
+      endPoint.y = startPoint.y + Math.sin(angleReflected) * 2000;
+      hasIntersectedAnything = true;
+      ++nrIntersections;
+    }
+    
+    
+  }
+  
+  if (hasIntersectedAnything) {
+    ctx.strokeStyle= "rgba(247,37,135,0.1)";
+  } else {
     var length = Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
     var grad= ctx.createLinearGradient(0, 0, 0, length);
-  
+
     var startGrey = Math.round(Math.random() * 255);
     var endGrey = Math.round(Math.random() * 255);
-  
+
     var colorStart = "rgba("+startGrey+","+startGrey+","+startGrey+",0.1)";
     var colorEnd = "rgba("+endGrey+","+endGrey+","+endGrey+",0.1)";
-  
+
     grad.addColorStop(0, colorStart);
     grad.addColorStop(1, colorEnd);
     ctx.strokeStyle = grad;
-  } else {
-    ctx.strokeStyle= "rgba(247,37,135,0.1)";
   }
+  if (exitLoop || nrIntersections < maxIntersections)
+    ctx.lineTo(endPoint.x, endPoint.y);
+  
+  ctx.stroke();
   
   /*
   console.log(mouseX);
@@ -140,13 +257,33 @@ function drawLine() {
   console.log(b);
   console.log(length);
   */
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(a.x,a.y);
-  ctx.lineTo(b.x, b.y);
-  ctx.stroke();
+
   
 
+}
+
+// for debug only
+function drawCharacters() {
+  ctx.lineWidth = 1;
+  ctx.strokeStyle= "#fff";
+  for (charIt in charsOutlines) {
+    ctx.beginPath();
+    for (outlineIt in charsOutlines[charIt]) {
+      var startPt = charsOutlines[charIt][outlineIt][0];
+//      startPt.x += 100;
+//      startPt.y += 100;
+      ctx.moveTo(startPt.x,startPt.y);
+      for (var pointIt = 1; pointIt < charsOutlines[charIt][outlineIt].length; ++pointIt) {
+//        console.log(charsOutlines[charIt][outlineIt][pointIt]);
+        var newPoint = charsOutlines[charIt][outlineIt][pointIt];
+//        newPoint.x += 100;
+//        newPoint.y += 100;
+        ctx.lineTo(newPoint.x, newPoint.y);
+      }
+      ctx.lineTo(startPt.x, startPt.y);
+    }
+    ctx.stroke();
+  }
 }
 
 function draw() {
@@ -154,8 +291,7 @@ function draw() {
   for (var i = 0; i < density; ++i) {
     drawLine();
   }
-  
-  
+
   window.requestAnimationFrame(draw);
   
   if(!lastCalledTime) {
